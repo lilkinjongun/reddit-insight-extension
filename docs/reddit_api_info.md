@@ -1,0 +1,1 @@
+This file contains information about the Reddit API, including details on comment collection, authentication, and rate limits. It was generated during the research phase of the Reddit Insight Extension development.

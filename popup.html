@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Reddit Insight</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      width: 300px;
+      padding: 10px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      background-color: #FF4500;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #E03C00;
+    }
+    #results {
+      margin-top: 20px;
+      border-top: 1px solid #eee;
+      padding-top: 10px;
+    }
+    .sentiment-positive { color: green; }
+    .sentiment-negative { color: red; }
+    .sentiment-neutral { color: gray; }
+    .api-key-section {
+      margin-top: 15px;
+      padding-top: 10px;
+      border-top: 1px solid #eee;
+    }
+    .api-key-section input {
+      width: calc(100% - 22px);
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Reddit Insight</h1>
+  <p>Click below to analyze the current Reddit thread.</p>
+  <button id="analyzeButton">Analyze Comments</button>
+  <button id="exportPdfButton" style="display: none;">Export to PDF</button>
+  <button id="exportMarkdownButton" style="display: none;">Export to Markdown</button>
+  <button id="cleanReadModeButton" style="display: none;">Toggle Clean Read Mode</button>
+
+  <div class="api-key-section">
+    <h3>OpenAI API Key</h3>
+    <input type="password" id="openaiApiKey" placeholder="Enter your OpenAI API Key">
+    <button id="saveApiKeyButton">Save API Key</button>
+    <p id="apiKeyStatus"></p>
+  </div>
+
+  <button id="generateResponseButton" style="display: none;">Generate AI Response</button>
+
+  <div id="results"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
