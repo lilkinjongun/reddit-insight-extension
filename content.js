@@ -4,7 +4,7 @@ let highlightedComments = [];
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "analyzeComments") {
     const url = window.location.href;
-    const regex = /reddit\\.com\\/r\\/([^\\/]+)\\/comments\\/([^\\/]+)/;
+    const regex = /reddit\.com\/r\/([^\/]+)\/comments\/([^\/]+)/;
     const match = url.match(regex);
 
     if (match && match.length >= 3) {

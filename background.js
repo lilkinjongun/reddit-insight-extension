@@ -282,7 +282,7 @@ async function generateAIResponse(analysisResults, apiKey) {
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === "analyzeComments") {
     const url = sender.tab.url;
-    const regex = /reddit\\.com\\/r\\/([^\\/]+)\\/comments\\/([^\\/]+)/;
+    const regex = /reddit\.com\/r\/([^\/]+)\/comments\/([^\/]+)/;
     const match = url.match(regex);
 
     if (!match || match.length < 3) {
