@@ -130,24 +130,34 @@ function addDepthToComments(comments, depth = 0) {
 }
 
 // Utility function to format results as Markdown
+/**
+ * Formats the analysis results into a Markdown string.
+ * This function is designed to produce clean, readable Markdown that can be easily converted to PDF.
+ * For a true PDF export with custom styling, an offscreen document and a client-side PDF library (e.g., jsPDF, html2pdf.js) would be required.
+ * This is noted as a potential future enhancement to avoid increasing the extension's bundle size and complexity at this stage.
+ */
 function formatResultsAsMarkdown(results) {
   let markdown = `# Reddit Thread Analysis\n\n`;
+  markdown += `*Generated on: ${new Date().toLocaleString()}*\n\n`;
 
   markdown += `## Summary\n\n${results.summary || "No summary available."}\n\n`;
 
   if (results.polarization) {
     markdown += `## Polarization Analysis\n\n`;
-    markdown += `- Positive Comments: ${results.polarization.positive}\n`;
-    markdown += `- Negative Comments: ${results.polarization.negative}\n`;
-    markdown += `- Neutral Comments: ${results.polarization.neutral}\n`;
-    markdown += `- Polarization Score: ${results.polarization.polarization.toFixed(2)}\n\n`;
+    markdown += `| Metric             | Value         |\n`;
+    markdown += `| :----------------- | :------------ |\n`;
+    markdown += `| Positive Comments  | ${results.polarization.positive}     |\n`;
+    markdown += `| Negative Comments  | ${results.polarization.negative}     |\n`;
+    markdown += `| Neutral Comments   | ${results.polarization.neutral}     |\n`;
+    markdown += `| Polarization Score | ${results.polarization.polarization.toFixed(2)} |\n\n`;
   }
 
   if (results.relevantComments && results.relevantComments.length > 0) {
     markdown += `## Most Relevant Comments\n\n`;
-    results.relevantComments.forEach((comment) => {
-      markdown += `- **Author:** ${comment.author} (Score: ${comment.score}, Sentiment: ${comment.sentiment ? comment.sentiment.label : "N/A"})\n`;
-      markdown += `  ${comment.body}\n\n`;
+    results.relevantComments.forEach((comment, index) => {
+      const sentimentLabel = comment.sentiment ? comment.sentiment.label : "N/A";
+      markdown += `### ${index + 1}. Comment by u/${comment.author} (Score: ${comment.score}, Sentiment: ${sentimentLabel})\n`;
+      markdown += `> ${comment.body.replace(/\n/g, '\n> ')}\n\n`; // Format as blockquote
     });
   }
 
@@ -155,9 +165,12 @@ function formatResultsAsMarkdown(results) {
   function renderCommentMarkdown(comment) {
     const sentimentLabel = comment.sentiment ? comment.sentiment.label : "N/A";
     const sentimentScore = comment.sentiment ? comment.sentiment.score.toFixed(2) : "N/A";
-    const indent = "  ".repeat(comment.depth);
-    markdown += `${indent}- **Author:** ${comment.author} (Score: ${comment.score}, Sentiment: ${sentimentLabel} [${sentimentScore}])\n`;
-    markdown += `${indent}  ${comment.body}\n\n`;
+    const indentLevel = comment.depth || 0;
+    const indent = "  ".repeat(indentLevel);
+    
+    markdown += `${indent}- **Author:** u/${comment.author} (Score: ${comment.score}, Sentiment: ${sentimentLabel} [${sentimentScore}])\n`;
+    markdown += `${indent}  ${comment.body.replace(/\n/g, `\n${indent}  `)}\n\n`; // Preserve newlines and indent body
+
     if (comment.replies && comment.replies.length > 0) {
       comment.replies.forEach((reply) => renderCommentMarkdown(reply));
     }
