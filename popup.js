@@ -57,27 +57,7 @@ document.getElementById("clearResultsButton").addEventListener("click", () => {
   });
 });
 
-document.getElementById("saveApiKeyButton").addEventListener("click", () => {
-  const apiKey = document.getElementById("openaiApiKey").value;
-  if (apiKey) {
-    chrome.storage.local.set({ openaiApiKey: apiKey }, () => {
-      document.getElementById("apiKeyStatus").innerText = "API Key saved!";
-      document.getElementById("openaiApiKey").value = ""; // Clear input after saving
-      document.getElementById("generateResponseButton").style.display = "block"; // Show generate button
-      document.getElementById("removeApiKeyButton").style.display = "block";
-    });
-  } else {
-    document.getElementById("apiKeyStatus").innerText = "Please enter an API Key.";
-  }
-});
 
-document.getElementById("removeApiKeyButton").addEventListener("click", () => {
-  chrome.storage.local.remove(["openaiApiKey"], () => {
-    document.getElementById("apiKeyStatus").innerText = "API Key removed.";
-    document.getElementById("generateResponseButton").style.display = "none";
-    document.getElementById("removeApiKeyButton").style.display = "none";
-  });
-});
 
 document.getElementById("generateResponseButton").addEventListener("click", () => {
   const statusMessageDiv = document.getElementById("status-message");
@@ -87,16 +67,12 @@ document.getElementById("generateResponseButton").addEventListener("click", () =
   chrome.runtime.sendMessage({ action: "generateAIResponse" });
 });
 
-// Load API key status on popup open
+// Load API key status on popup open (only for generateResponseButton)
 chrome.storage.local.get(["openaiApiKey"], (result) => {
   if (result.openaiApiKey) {
-    document.getElementById("apiKeyStatus").innerText = "API Key is set.";
     document.getElementById("generateResponseButton").style.display = "block";
-    document.getElementById("removeApiKeyButton").style.display = "block";
   } else {
-    document.getElementById("apiKeyStatus").innerText = "No API Key set. Please enter one to enable AI features.";
     document.getElementById("generateResponseButton").style.display = "none";
-    document.getElementById("removeApiKeyButton").style.display = "none";
   }
 });
 
