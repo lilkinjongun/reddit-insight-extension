@@ -1,3 +1,6 @@
+let globalAnalysisResults = null; // Store results globally for filtering
+let currentFilter = "all";
+
 document.getElementById("analyzeButton").addEventListener("click", () => {
   const statusMessageDiv = document.getElementById("status-message");
   statusMessageDiv.style.display = "block";
@@ -10,6 +13,7 @@ document.getElementById("analyzeButton").addEventListener("click", () => {
   document.getElementById("exportMarkdownButton").disabled = true;
   document.getElementById("cleanReadModeButton").disabled = true;
   document.getElementById("generateResponseButton").disabled = true;
+  document.querySelectorAll(".filter-section button").forEach(btn => btn.disabled = true);
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     chrome.runtime.sendMessage({ action: "analyzeComments", tabId: tabs[0].id });
@@ -40,6 +44,11 @@ document.getElementById("clearResultsButton").addEventListener("click", () => {
   document.getElementById("clearResultsButton").style.display = "none";
   document.getElementById("generateResponseButton").style.display = "none";
   document.getElementById("analyzeButton").disabled = false;
+  document.querySelector(".filter-section").style.display = "none";
+  document.querySelectorAll(".filter-section button").forEach(btn => btn.disabled = false);
+  currentFilter = "all"; // Reset filter
+  updateFilterButtons("filterAllButton"); // Reset filter button styling
+
   // Re-check API key status to re-enable AI button if key is present
   chrome.storage.local.get(["openaiApiKey"], (result) => {
     if (result.openaiApiKey) {
@@ -111,6 +120,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "displayResults") {
     statusMessageDiv.style.display = "none";
     resultsContainer.innerHTML = ""; // Clear previous results
+    globalAnalysisResults = request; // Store the full results
 
     // Enable buttons after analysis
     document.getElementById("analyzeButton").disabled = false;
@@ -122,6 +132,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     document.getElementById("exportMarkdownButton").disabled = false;
     document.getElementById("cleanReadModeButton").disabled = false;
     document.getElementById("generateResponseButton").disabled = false;
+    document.querySelector(".filter-section").style.display = "block"; // Show filter section
+    document.querySelectorAll(".filter-section button").forEach(btn => btn.disabled = false);
 
     if (request.status === "error") {
       resultsContainer.innerHTML = `<div class="result-section"><p style="color: red;">Error: ${request.message}</p></div>`;
@@ -156,7 +168,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const relevantCommentsSection = document.createElement("div");
     relevantCommentsSection.classList.add("result-section");
     if (request.relevantComments && request.relevantComments.length > 0) {
-      let commentsHtml = "<h2>Most Relevant Comments <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><ul>";
+      let commentsHtml = "<h2>Most Relevant Comments <span class=\"toggle-icon\">&#9660;</span></h2><div class="result-content"><ul>";
       request.relevantComments.forEach(comment => {
         const sentimentLabel = comment.sentiment ? comment.sentiment.label : "N/A";
         commentsHtml += `<li class="comment-item"><strong>Author:</strong> ${comment.author} (Score: ${comment.score}, Sentiment: <span class="sentiment-${sentimentLabel.toLowerCase()}">${sentimentLabel}</span>)<br>${comment.body}</li>`;
@@ -169,29 +181,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     resultsContainer.appendChild(relevantCommentsSection);
 
     // Display all comments with sentiment (for debugging/detailed view)
-    const allCommentsSection = document.createElement("div");
-    allCommentsSection.classList.add("result-section");
-    if (request.comments && request.comments.length > 0) {
-      let allCommentsHtml = "<h2>All Comments <span class="toggle-icon">&#9660;</span></h2><div class="result-content">";
-      function renderComment(comment) {
-        const sentimentLabel = comment.sentiment ? comment.sentiment.label : "N/A";
-        const sentimentScore = comment.sentiment ? comment.sentiment.score.toFixed(2) : "N/A";
-        const indent = comment.depth * 20;
-        allCommentsHtml += `<div class="comment-item" style="margin-left: ${indent}px;">
-          <strong>Author:</strong> ${comment.author} (Score: ${comment.score}, Sentiment: <span class="sentiment-${sentimentLabel.toLowerCase()}">${sentimentLabel}</span> [${sentimentScore}])<br>
-          ${comment.body}
-        </div>`;
-        if (comment.replies && comment.replies.length > 0) {
-          comment.replies.forEach(reply => renderComment(reply));
-        }
-      }
-      request.comments.forEach(comment => renderComment(comment));
-      allCommentsHtml += "</div>";
-      allCommentsSection.innerHTML = allCommentsHtml;
-    } else {
-      allCommentsSection.innerHTML = `<h2>All Comments <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><p>No comments found.</p></div>`;
-    }
-    resultsContainer.appendChild(allCommentsSection);
+    displayFilteredComments(request.comments, currentFilter);
 
     setupCollapsibleSections();
     sendResponse({ status: "success" });
@@ -210,3 +200,102 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     statusMessageDiv.innerHTML = `<p>${request.message}</p>`;
   }
 });
+
+function displayFilteredComments(commentsToDisplay, filter) {
+  const resultsContainer = document.getElementById("results-container");
+  let allCommentsSection = resultsContainer.querySelector("#allCommentsSection");
+  if (!allCommentsSection) {
+    allCommentsSection = document.createElement("div");
+    allCommentsSection.id = "allCommentsSection";
+    allCommentsSection.classList.add("result-section");
+    resultsContainer.appendChild(allCommentsSection);
+  }
+
+  let filteredComments = [];
+  if (filter === "all") {
+    filteredComments = commentsToDisplay;
+  } else {
+    function filterRecursive(commentList) {
+      let filtered = [];
+      for (const comment of commentList) {
+        if (comment.sentiment && comment.sentiment.label.toLowerCase() === filter) {
+          filtered.push(comment);
+        }
+        if (comment.replies && comment.replies.length > 0) {
+          filtered = filtered.concat(filterRecursive(comment.replies));
+        }
+      }
+      return filtered;
+    }
+    filteredComments = filterRecursive(commentsToDisplay);
+  }
+
+  if (filteredComments && filteredComments.length > 0) {
+    let allCommentsHtml = `<h2>All Comments (${filter === "all" ? "All" : filter.charAt(0).toUpperCase() + filter.slice(1)}) <span class="toggle-icon">&#9660;</span></h2><div class="result-content">`;
+    function renderComment(comment) {
+      const sentimentLabel = comment.sentiment ? comment.sentiment.label : "N/A";
+      const sentimentScore = comment.sentiment ? comment.sentiment.score.toFixed(2) : "N/A";
+      const indent = comment.depth * 20;
+      allCommentsHtml += `<div class="comment-item" style="margin-left: ${indent}px;">
+        <strong>Author:</strong> ${comment.author} (Score: ${comment.score}, Sentiment: <span class="sentiment-${sentimentLabel.toLowerCase()}">${sentimentLabel}</span> [${sentimentScore}])<br>
+        ${comment.body}
+      </div>`;
+      if (comment.replies && comment.replies.length > 0) {
+        comment.replies.forEach(reply => renderComment(reply));
+      }
+    }
+    filteredComments.forEach(comment => renderComment(comment));
+    allCommentsHtml += "</div>";
+    allCommentsSection.innerHTML = allCommentsHtml;
+  } else {
+    allCommentsSection.innerHTML = `<h2>All Comments (${filter === "all" ? "All" : filter.charAt(0).toUpperCase() + filter.slice(1)}) <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><p>No ${filter} comments found.</p></div>`;
+  }
+  setupCollapsibleSections();
+}
+
+function updateFilterButtons(activeButtonId) {
+  const buttons = ["filterAllButton", "filterPositiveButton", "filterNegativeButton", "filterNeutralButton"];
+  buttons.forEach(id => {
+    const button = document.getElementById(id);
+    if (button) {
+      button.classList.remove("filter-active");
+    }
+  });
+  const activeButton = document.getElementById(activeButtonId);
+  if (activeButton) {
+    activeButton.classList.add("filter-active");
+  }
+}
+
+document.getElementById("filterAllButton").addEventListener("click", () => {
+  currentFilter = "all";
+  updateFilterButtons("filterAllButton");
+  if (globalAnalysisResults) {
+    displayFilteredComments(globalAnalysisResults.comments, currentFilter);
+  }
+});
+
+document.getElementById("filterPositiveButton").addEventListener("click", () => {
+  currentFilter = "positive";
+  updateFilterButtons("filterPositiveButton");
+  if (globalAnalysisResults) {
+    displayFilteredComments(globalAnalysisResults.comments, currentFilter);
+  }
+});
+
+document.getElementById("filterNegativeButton").addEventListener("click", () => {
+  currentFilter = "negative";
+  updateFilterButtons("filterNegativeButton");
+  if (globalAnalysisResults) {
+    displayFilteredComments(globalAnalysisResults.comments, currentFilter);
+  }
+});
+
+document.getElementById("filterNeutralButton").addEventListener("click", () => {
+  currentFilter = "neutral";
+  updateFilterButtons("filterNeutralButton");
+  if (globalAnalysisResults) {
+    displayFilteredComments(globalAnalysisResults.comments, currentFilter);
+  }
+});
+
