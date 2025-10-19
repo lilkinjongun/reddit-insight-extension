@@ -2,6 +2,14 @@ import { pipeline } from './lib/transformers.min.js';
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("Reddit Insight Extension installed.");
+  initializeSentimentPipeline();
+  initializeSummarizationPipeline();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  console.log("Reddit Insight Extension starting up.");
+  initializeSentimentPipeline();
+  initializeSummarizationPipeline();
 });
 
 let sentimentPipeline = null;
