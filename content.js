@@ -33,7 +33,7 @@ function toggleCleanReadMode(relevantComments) {
 
   if (cleanReadModeActive) {
     // Hide non-essential elements
-    document.querySelectorAll("header, ._1O4jTk-dZ-VIOTisY5G3_U, ._396c-E_--_hIAnj1y_x4Y-, ._2_V_52I2-2L144-5H_2G_7, ._1r4smTyOEZp1i14_--2_V_5").forEach(el => el.style.display = 'none');
+    document.querySelectorAll("header").forEach(el => el.style.display = 'none');
 
     // Highlight relevant comments
     if (relevantComments) {
@@ -49,7 +49,7 @@ function toggleCleanReadMode(relevantComments) {
     }
   } else {
     // Restore hidden elements
-    document.querySelectorAll("header, ._1O4jTk-dZ-VIOTisY5G3_U, ._396c-E_--_hIAnj1y_x4Y-, ._2_V_52I2-2L144-5H_2G_7, ._1r4smTyOEZp1i14_--2_V_5").forEach(el => el.style.display = '');
+    document.querySelectorAll("header").forEach(el => el.style.display = '');
 
     // Remove highlights
     highlightedComments.forEach(comment => {
