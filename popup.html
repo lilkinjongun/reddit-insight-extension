@@ -4,42 +4,141 @@
   <title>Reddit Insight</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      width: 300px;
-      padding: 10px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      width: 350px;
+      padding: 15px;
+      background-color: #f0f2f5;
+      color: #333;
+    }
+    h1 {
+      color: #FF4500;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    h2 {
+      color: #555;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    h3 {
+      color: #666;
+      margin-top: 15px;
+    }
+    p {
+      margin-bottom: 10px;
     }
     button {
       width: 100%;
-      padding: 10px;
+      padding: 12px;
       margin-top: 10px;
       background-color: #FF4500;
       color: white;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
       cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.2s ease;
     }
     button:hover {
       background-color: #E03C00;
     }
-    #results {
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .button-group button {
+      flex: 1;
+      min-width: 100px;
+      margin-top: 0;
+    }
+    #status-message {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #e7f3fe;
+      border: 1px solid #c2e0ff;
+      border-radius: 5px;
+      color: #0056b3;
+      text-align: center;
+      display: none; /* Hidden by default */
+    }
+    #results-container {
       margin-top: 20px;
       border-top: 1px solid #eee;
       padding-top: 10px;
     }
-    .sentiment-positive { color: green; }
-    .sentiment-negative { color: red; }
-    .sentiment-neutral { color: gray; }
+    .result-section {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      padding: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .result-section h2 {
+      margin-top: 0;
+      border-bottom: none;
+      padding-bottom: 0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .result-section h2 span.toggle-icon { 
+      font-size: 1.2em;
+      transition: transform 0.2s ease;
+    }
+    .result-section h2.collapsed span.toggle-icon {
+      transform: rotate(-90deg);
+    }
+    .result-content {
+      display: block;
+      margin-top: 10px;
+    }
+    .result-content.hidden {
+      display: none;
+    }
+    .sentiment-positive { color: #28a745; font-weight: bold; }
+    .sentiment-negative { color: #dc3545; font-weight: bold; }
+    .sentiment-neutral { color: #6c757d; font-weight: bold; }
+    .comment-item {
+      margin-bottom: 10px;
+      padding: 8px;
+      border-left: 3px solid #FF4500;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+    }
+    .comment-item strong { color: #333; }
     .api-key-section {
-      margin-top: 15px;
-      padding-top: 10px;
-      border-top: 1px solid #eee;
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .api-key-section input {
       width: calc(100% - 22px);
-      padding: 8px;
-      margin-top: 5px;
+      padding: 10px;
+      margin-top: 8px;
       border: 1px solid #ccc;
-      border-radius: 4px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    #apiKeyStatus {
+      font-size: 0.9em;
+      margin-top: 10px;
+      color: #555;
+    }
+    #aiResponseSection {
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -47,20 +146,31 @@
   <h1>Reddit Insight</h1>
   <p>Click below to analyze the current Reddit thread.</p>
   <button id="analyzeButton">Analyze Comments</button>
-  <button id="exportPdfButton" style="display: none;">Export to PDF</button>
-  <button id="exportMarkdownButton" style="display: none;">Export to Markdown</button>
-  <button id="cleanReadModeButton" style="display: none;">Toggle Clean Read Mode</button>
+
+  <div class="button-group">
+    <button id="exportPdfButton" style="display: none;">Export PDF</button>
+    <button id="exportMarkdownButton" style="display: none;">Export MD</button>
+    <button id="cleanReadModeButton" style="display: none;">Clean Read Mode</button>
+    <button id="clearResultsButton" style="display: none;">Clear Results</button>
+  </div>
+
+  <div id="status-message"></div>
+
+  <div id="results-container">
+    <!-- Analysis results will be displayed here -->
+  </div>
 
   <div class="api-key-section">
     <h3>OpenAI API Key</h3>
     <input type="password" id="openaiApiKey" placeholder="Enter your OpenAI API Key">
     <button id="saveApiKeyButton">Save API Key</button>
+    <button id="removeApiKeyButton" style="display: none;">Remove API Key</button>
     <p id="apiKeyStatus"></p>
   </div>
 
   <button id="generateResponseButton" style="display: none;">Generate AI Response</button>
 
-  <div id="results"></div>
   <script src="popup.js"></script>
 </body>
 </html>
+

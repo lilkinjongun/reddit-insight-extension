@@ -1,7 +1,18 @@
 document.getElementById("analyzeButton").addEventListener("click", () => {
-  document.getElementById("results").innerHTML = "<p>Analyzing comments... This may take a moment.</p>";
+  const statusMessageDiv = document.getElementById("status-message");
+  statusMessageDiv.style.display = "block";
+  statusMessageDiv.innerHTML = "<p>Analyzing comments... This may take a moment.</p>";
+  document.getElementById("results-container").innerHTML = ""; // Clear previous results
+  
+  // Disable buttons during analysis
+  document.getElementById("analyzeButton").disabled = true;
+  document.getElementById("exportPdfButton").disabled = true;
+  document.getElementById("exportMarkdownButton").disabled = true;
+  document.getElementById("cleanReadModeButton").disabled = true;
+  document.getElementById("generateResponseButton").disabled = true;
+
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    chrome.tabs.sendMessage(tabs[0].id, { action: "analyzeComments" });
+    chrome.runtime.sendMessage({ action: "analyzeComments", tabId: tabs[0].id });
   });
 });
 
@@ -19,6 +30,24 @@ document.getElementById("cleanReadModeButton").addEventListener("click", () => {
   });
 });
 
+document.getElementById("clearResultsButton").addEventListener("click", () => {
+  document.getElementById("results-container").innerHTML = "";
+  document.getElementById("status-message").innerHTML = "";
+  document.getElementById("status-message").style.display = "none";
+  document.getElementById("exportPdfButton").style.display = "none";
+  document.getElementById("exportMarkdownButton").style.display = "none";
+  document.getElementById("cleanReadModeButton").style.display = "none";
+  document.getElementById("clearResultsButton").style.display = "none";
+  document.getElementById("generateResponseButton").style.display = "none";
+  document.getElementById("analyzeButton").disabled = false;
+  // Re-check API key status to re-enable AI button if key is present
+  chrome.storage.local.get(["openaiApiKey"], (result) => {
+    if (result.openaiApiKey) {
+      document.getElementById("generateResponseButton").style.display = "block";
+    }
+  });
+});
+
 document.getElementById("saveApiKeyButton").addEventListener("click", () => {
   const apiKey = document.getElementById("openaiApiKey").value;
   if (apiKey) {
@@ -26,14 +55,26 @@ document.getElementById("saveApiKeyButton").addEventListener("click", () => {
       document.getElementById("apiKeyStatus").innerText = "API Key saved!";
       document.getElementById("openaiApiKey").value = ""; // Clear input after saving
       document.getElementById("generateResponseButton").style.display = "block"; // Show generate button
+      document.getElementById("removeApiKeyButton").style.display = "block";
     });
   } else {
     document.getElementById("apiKeyStatus").innerText = "Please enter an API Key.";
   }
 });
 
+document.getElementById("removeApiKeyButton").addEventListener("click", () => {
+  chrome.storage.local.remove(["openaiApiKey"], () => {
+    document.getElementById("apiKeyStatus").innerText = "API Key removed.";
+    document.getElementById("generateResponseButton").style.display = "none";
+    document.getElementById("removeApiKeyButton").style.display = "none";
+  });
+});
+
 document.getElementById("generateResponseButton").addEventListener("click", () => {
-  document.getElementById("results").innerHTML += "<p>Generating AI response... This may take a moment.</p>";
+  const statusMessageDiv = document.getElementById("status-message");
+  statusMessageDiv.style.display = "block";
+  statusMessageDiv.innerHTML = "<p>Generating AI response... This may take a moment.</p>";
+  document.getElementById("generateResponseButton").disabled = true;
   chrome.runtime.sendMessage({ action: "generateAIResponse" });
 });
 
@@ -42,65 +83,102 @@ chrome.storage.local.get(["openaiApiKey"], (result) => {
   if (result.openaiApiKey) {
     document.getElementById("apiKeyStatus").innerText = "API Key is set.";
     document.getElementById("generateResponseButton").style.display = "block";
+    document.getElementById("removeApiKeyButton").style.display = "block";
   } else {
     document.getElementById("apiKeyStatus").innerText = "No API Key set. Please enter one to enable AI features.";
     document.getElementById("generateResponseButton").style.display = "none";
+    document.getElementById("removeApiKeyButton").style.display = "none";
   }
 });
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "displayResults") {
-    const resultsDiv = document.getElementById("results");
-    resultsDiv.innerHTML = ""; // Clear previous results
+// Toggle collapsible sections
+function setupCollapsibleSections() {
+  document.querySelectorAll(".result-section h2").forEach(header => {
+    header.addEventListener("click", () => {
+      header.classList.toggle("collapsed");
+      const content = header.nextElementSibling;
+      if (content) {
+        content.classList.toggle("hidden");
+      }
+    });
+  });
+}
 
-    // Show export and clean read mode buttons
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  const resultsContainer = document.getElementById("results-container");
+  const statusMessageDiv = document.getElementById("status-message");
+
+  if (request.action === "displayResults") {
+    statusMessageDiv.style.display = "none";
+    resultsContainer.innerHTML = ""; // Clear previous results
+
+    // Enable buttons after analysis
+    document.getElementById("analyzeButton").disabled = false;
     document.getElementById("exportPdfButton").style.display = "block";
     document.getElementById("exportMarkdownButton").style.display = "block";
     document.getElementById("cleanReadModeButton").style.display = "block";
+    document.getElementById("clearResultsButton").style.display = "block";
+    document.getElementById("exportPdfButton").disabled = false;
+    document.getElementById("exportMarkdownButton").disabled = false;
+    document.getElementById("cleanReadModeButton").disabled = false;
+    document.getElementById("generateResponseButton").disabled = false;
+
+    if (request.status === "error") {
+      resultsContainer.innerHTML = `<div class="result-section"><p style="color: red;">Error: ${request.message}</p></div>`;
+      return;
+    }
 
     // Display Summary
     const summarySection = document.createElement("div");
-    summarySection.innerHTML = `<h2>Summary</h2><p>${request.summary || "No summary available."}</p>`;
-    resultsDiv.appendChild(summarySection);
+    summarySection.classList.add("result-section");
+    summarySection.innerHTML = `<h2>Summary <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><p>${request.summary || "No summary available."}</p></div>`;
+    resultsContainer.appendChild(summarySection);
 
     // Display Polarization
     const polarizationSection = document.createElement("div");
+    polarizationSection.classList.add("result-section");
     if (request.polarization) {
       polarizationSection.innerHTML = `
-        <h2>Polarization Analysis</h2>
-        <p>Positive Comments: ${request.polarization.positive}</p>
-        <p>Negative Comments: ${request.polarization.negative}</p>
-        <p>Neutral Comments: ${request.polarization.neutral}</p>
-        <p>Polarization Score: ${request.polarization.polarization.toFixed(2)}</p>
+        <h2>Polarization Analysis <span class="toggle-icon">&#9660;</span></h2>
+        <div class="result-content">
+          <p>Positive Comments: ${request.polarization.positive}</p>
+          <p>Negative Comments: ${request.polarization.negative}</p>
+          <p>Neutral Comments: ${request.polarization.neutral}</p>
+          <p>Polarization Score: ${request.polarization.polarization.toFixed(2)}</p>
+        </div>
       `;
     } else {
-      polarizationSection.innerHTML = `<h2>Polarization Analysis</h2><p>No polarization data available.</p>`;
+      polarizationSection.innerHTML = `<h2>Polarization Analysis <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><p>No polarization data available.</p></div>`;
     }
-    resultsDiv.appendChild(polarizationSection);
+    resultsContainer.appendChild(polarizationSection);
 
     // Display Relevant Comments
     const relevantCommentsSection = document.createElement("div");
+    relevantCommentsSection.classList.add("result-section");
     if (request.relevantComments && request.relevantComments.length > 0) {
-      let commentsHtml = "<h2>Most Relevant Comments</h2><ul>";
+      let commentsHtml = "<h2>Most Relevant Comments <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><ul>";
       request.relevantComments.forEach(comment => {
-        commentsHtml += `<li><strong>Author:</strong> ${comment.author} (Score: ${comment.score}, Sentiment: ${comment.sentiment ? comment.sentiment.label : "N/A"})<br>${comment.body}</li>`;
+        const sentimentLabel = comment.sentiment ? comment.sentiment.label : "N/A";
+        commentsHtml += `<li class="comment-item"><strong>Author:</strong> ${comment.author} (Score: ${comment.score}, Sentiment: <span class="sentiment-${sentimentLabel.toLowerCase()}">${sentimentLabel}</span>)<br>${comment.body}</li>`;
       });
-      commentsHtml += "</ul>";
+      commentsHtml += "</ul></div>";
       relevantCommentsSection.innerHTML = commentsHtml;
     } else {
-      relevantCommentsSection.innerHTML = `<h2>Most Relevant Comments</h2><p>No relevant comments found.</p>`;
+      relevantCommentsSection.innerHTML = `<h2>Most Relevant Comments <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><p>No relevant comments found.</p></div>`;
     }
-    resultsDiv.appendChild(relevantCommentsSection);
+    resultsContainer.appendChild(relevantCommentsSection);
 
     // Display all comments with sentiment (for debugging/detailed view)
     const allCommentsSection = document.createElement("div");
+    allCommentsSection.classList.add("result-section");
     if (request.comments && request.comments.length > 0) {
-      let allCommentsHtml = "<h2>All Comments with Sentiment</h2>";
+      let allCommentsHtml = "<h2>All Comments <span class="toggle-icon">&#9660;</span></h2><div class="result-content">";
       function renderComment(comment) {
         const sentimentLabel = comment.sentiment ? comment.sentiment.label : "N/A";
         const sentimentScore = comment.sentiment ? comment.sentiment.score.toFixed(2) : "N/A";
-        allCommentsHtml += `<div style="margin-left: ${comment.depth * 20}px; border-left: 1px solid #ccc; padding-left: 5px; margin-bottom: 5px;">
-          <strong>Author:</strong> ${comment.author} (Score: ${comment.score}, Sentiment: ${sentimentLabel} [${sentimentScore}])<br>
+        const indent = comment.depth * 20;
+        allCommentsHtml += `<div class="comment-item" style="margin-left: ${indent}px;">
+          <strong>Author:</strong> ${comment.author} (Score: ${comment.score}, Sentiment: <span class="sentiment-${sentimentLabel.toLowerCase()}">${sentimentLabel}</span> [${sentimentScore}])<br>
           ${comment.body}
         </div>`;
         if (comment.replies && comment.replies.length > 0) {
@@ -108,16 +186,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       }
       request.comments.forEach(comment => renderComment(comment));
+      allCommentsHtml += "</div>";
       allCommentsSection.innerHTML = allCommentsHtml;
     } else {
-      allCommentsSection.innerHTML = `<h2>All Comments with Sentiment</h2><p>No comments found.</p>`;
+      allCommentsSection.innerHTML = `<h2>All Comments <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><p>No comments found.</p></div>`;
     }
-    resultsDiv.appendChild(allCommentsSection);
+    resultsContainer.appendChild(allCommentsSection);
+
+    setupCollapsibleSections();
     sendResponse({ status: "success" });
+
   } else if (request.action === "displayAIResponse") {
-    const resultsDiv = document.getElementById("results");
+    document.getElementById("generateResponseButton").disabled = false;
+    statusMessageDiv.style.display = "none";
     const aiResponseSection = document.createElement("div");
-    aiResponseSection.innerHTML = `<h2>AI Generated Response</h2><p>${request.aiResponse || "No AI response generated."}</p>`;
-    resultsDiv.appendChild(aiResponseSection);
+    aiResponseSection.id = "aiResponseSection";
+    aiResponseSection.classList.add("result-section");
+    aiResponseSection.innerHTML = `<h2>AI Generated Response <span class="toggle-icon">&#9660;</span></h2><div class="result-content"><p>${request.aiResponse || "No AI response generated."}</p></div>`;
+    resultsContainer.appendChild(aiResponseSection);
+    setupCollapsibleSections();
+  } else if (request.action === "updateProgress") {
+    statusMessageDiv.style.display = "block";
+    statusMessageDiv.innerHTML = `<p>${request.message}</p>`;
   }
 });
