@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Reddit Insight Settings</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      width: 400px;
+      padding: 20px;
+      background-color: #f0f2f5;
+      color: #333;
+    }
+    h1 {
+      color: #FF4500;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .setting-section {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      padding: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .setting-section h2 {
+      color: #555;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+    .setting-section label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .setting-section input[type="password"] {
+      width: calc(100% - 22px);
+      padding: 10px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    .setting-section button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      background-color: #FF4500;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s ease;
+    }
+    .setting-section button:hover {
+      background-color: #E03C00;
+    }
+    #apiKeyStatus {
+      font-size: 0.9em;
+      margin-top: 10px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>Reddit Insight Settings</h1>
+
+  <div class="setting-section">
+    <h2>OpenAI API Key Management</h2>
+    <label for="openaiApiKey">Enter your OpenAI API Key:</label>
+    <input type="password" id="openaiApiKey" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    <button id="saveApiKeyButton">Save API Key</button>
+    <button id="removeApiKeyButton" style="display: none;">Remove API Key</button>
+    <p id="apiKeyStatus"></p>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
+
