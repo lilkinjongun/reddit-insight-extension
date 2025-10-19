@@ -11,6 +11,15 @@ const analysisWorker = new Worker(chrome.runtime.getURL("analysis-worker.js"), {
 let lastAnalysisResults = null; // Store the last analysis results for export and AI response
 
 // Utility function to extract comments from Reddit API response
+function cleanCommentText(text) {
+  if (!text) return "";
+  // Remove URLs
+  let cleanedText = text.replace(/(?:https?|ftp):\/\/[\n\S]+/g, "");
+  // Replace multiple spaces with a single space, trim whitespace
+  cleanedText = cleanedText.replace(/\s+/g, " ").trim();
+  return cleanedText;
+}
+
 function extractComments(data) {
   const comments = [];
 
@@ -19,7 +28,7 @@ function extractComments(data) {
       const commentData = {
         id: comment.data.id,
         author: comment.data.author,
-        body: comment.data.body,
+        body: cleanCommentText(comment.data.body),
         score: comment.data.score,
         created_utc: comment.data.created_utc,
         replies: [],
@@ -266,7 +275,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       let allCommentText = "";
       function collectText(comment) {
         if (comment.body) {
-          allCommentText += comment.body + " ";
+          allCommentText += cleanCommentText(comment.body) + " ";
         }
         if (comment.replies && comment.replies.length > 0) {
           comment.replies.forEach(collectText);
