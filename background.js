@@ -244,7 +244,20 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     try {
       const response = await fetch(redditApiUrl);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMessage = `HTTP error! Status: ${response.status}`;
+        if (response.status === 404) {
+          errorMessage = "Reddit thread not found or invalid URL.";
+        } else if (response.status === 403) {
+          errorMessage = "Access to Reddit API forbidden. This might be a private thread or an issue with Reddit's API.";
+        } else if (response.status === 429) {
+          errorMessage = "Reddit API rate limit exceeded. Please wait a moment and try again.";
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          if (errorData.message) {
+            errorMessage = `Reddit API error: ${errorData.message}`; 
+          }
+        }
+        throw new Error(errorMessage);
       }
       const data = await response.json();
       let extractedComments = extractComments(data);
@@ -309,8 +322,15 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       sendResponse({ status: "success", message: "Analysis complete and results sent to popup." });
     } catch (error) {
       console.error("Error fetching, analyzing or summarizing comments:", error);
-      chrome.runtime.sendMessage(sender.tab.id, { action: "displayResults", status: "error", message: error.message });
-      sendResponse({ status: "error", message: error.message });
+      // Send a more user-friendly error message to the popup
+      let userErrorMessage = "An unexpected error occurred while analyzing the Reddit thread.";
+      if (error.message.includes("HTTP error!") || error.message.includes("Reddit thread not found") || error.message.includes("Access to Reddit API forbidden") || error.message.includes("Reddit API rate limit exceeded")) {
+        userErrorMessage = error.message;
+      } else if (error.message.includes("OpenAI API error")) {
+        userErrorMessage = `AI Response Error: ${error.message}. Please check your API key and try again.`;
+      }
+      chrome.runtime.sendMessage(sender.tab.id, { action: "displayResults", status: "error", message: userErrorMessage });
+      sendResponse({ status: "error", message: userErrorMessage });
     }
 
     return true; // Indicates that sendResponse will be called asynchronously
