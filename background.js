@@ -1,69 +1,32 @@
-import { pipeline } from './lib/transformers.min.js';
-
 chrome.runtime.onInstalled.addListener(() => {
   console.log("Reddit Insight Extension installed.");
-  initializeSentimentPipeline();
-  initializeSummarizationPipeline();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   console.log("Reddit Insight Extension starting up.");
-  initializeSentimentPipeline();
-  initializeSummarizationPipeline();
 });
 
-let sentimentPipeline = null;
-let summarizationPipeline = null;
+const analysisWorker = new Worker(chrome.runtime.getURL("analysis-worker.js"), { type: "module" });
+
 let lastAnalysisResults = null; // Store the last analysis results for export and AI response
 
-async function initializeSentimentPipeline() {
-  if (!sentimentPipeline) {
-    console.log("Initializing sentiment analysis pipeline...");
-    try {
-      sentimentPipeline = await pipeline(
-        'sentiment-analysis',
-        'Xenova/distilbert-base-uncased-finetuned-sst-2-english',
-        { quantized: true } // Use quantized model for better performance
-      );
-      console.log("Sentiment analysis pipeline initialized.");
-    } catch (error) {
-      console.error("Error initializing sentiment analysis pipeline:", error);
-    }
-  }
-}
-
-async function initializeSummarizationPipeline() {
-  if (!summarizationPipeline) {
-    console.log("Initializing summarization pipeline...");
-    try {
-      summarizationPipeline = await pipeline(
-        'summarization',
-        'Xenova/distilbart-cnn-6-6',
-        { quantized: true } // Use quantized model for better performance
-      );
-      console.log("Summarization pipeline initialized.");
-    } catch (error) {
-      console.error("Error initializing summarization pipeline:", error);
-    }
-  }
-}
-
+// Utility function to extract comments from Reddit API response
 function extractComments(data) {
   const comments = [];
 
   function parseComment(comment) {
-    if (comment.kind === 't1' && comment.data) {
+    if (comment.kind === "t1" && comment.data) {
       const commentData = {
         id: comment.data.id,
         author: comment.data.author,
         body: comment.data.body,
         score: comment.data.score,
         created_utc: comment.data.created_utc,
-        replies: []
+        replies: [],
       };
 
       if (comment.data.replies && comment.data.replies.data && comment.data.replies.data.children) {
-        comment.data.replies.data.children.forEach(reply => {
+        comment.data.replies.data.children.forEach((reply) => {
           const parsedReply = parseComment(reply);
           if (parsedReply) {
             commentData.replies.push(parsedReply);
@@ -76,7 +39,7 @@ function extractComments(data) {
   }
 
   if (data && data.length > 1 && data[1].data && data[1].data.children) {
-    data[1].data.children.forEach(item => {
+    data[1].data.children.forEach((item) => {
       const comment = parseComment(item);
       if (comment) {
         comments.push(comment);
@@ -86,52 +49,7 @@ function extractComments(data) {
   return comments;
 }
 
-async function analyzeSentiment(comments) {
-  if (!sentimentPipeline) {
-    await initializeSentimentPipeline();
-  }
-
-  if (!sentimentPipeline) {
-    console.error("Sentiment pipeline not available for analysis.");
-    return comments;
-  }
-
-  for (const comment of comments) {
-    if (comment.body) {
-      try {
-        const result = await sentimentPipeline(comment.body);
-        comment.sentiment = result[0]; // Assuming result is an array like [{label: 'POSITIVE', score: 0.99}]
-      } catch (error) {
-        console.error(`Error analyzing sentiment for comment ${comment.id}:`, error);
-        comment.sentiment = { label: 'NEUTRAL', score: 0 }; // Default to neutral on error
-      }
-    }
-    if (comment.replies.length > 0) {
-      await analyzeSentiment(comment.replies); // Recursively analyze replies
-    }
-  }
-  return comments;
-}
-
-async function generateSummary(text) {
-  if (!summarizationPipeline) {
-    await initializeSummarizationPipeline();
-  }
-
-  if (!summarizationPipeline) {
-    console.error("Summarization pipeline not available.");
-    return "";
-  }
-
-  try {
-    const result = await summarizationPipeline(text);
-    return result[0].summary_text;
-  } catch (error) {
-    console.error("Error generating summary:", error);
-    return "";
-  }
-}
-
+// Utility function to calculate polarization
 function calculatePolarization(comments) {
   let positiveCount = 0;
   let negativeCount = 0;
@@ -143,9 +61,9 @@ function calculatePolarization(comments) {
     if (comment.sentiment) {
       commentCount++;
       totalScore += comment.sentiment.score;
-      if (comment.sentiment.label === 'POSITIVE') {
+      if (comment.sentiment.label === "POSITIVE") {
         positiveCount++;
-      } else if (comment.sentiment.label === 'NEGATIVE') {
+      } else if (comment.sentiment.label === "NEGATIVE") {
         negativeCount++;
       } else {
         neutralCount++;
@@ -164,10 +82,11 @@ function calculatePolarization(comments) {
     negative: negativeCount,
     neutral: neutralCount,
     polarization: polarizationScore,
-    overallSentiment: overallSentiment
+    overallSentiment: overallSentiment,
   };
 }
 
+// Utility function to identify relevant comments
 async function identifyRelevantComments(comments, summaryKeywords) {
   const relevantComments = [];
 
@@ -176,14 +95,14 @@ async function identifyRelevantComments(comments, summaryKeywords) {
     relevance += comment.score || 0;
 
     if (comment.sentiment) {
-      relevance += Math.abs(comment.sentiment.score) * 10; 
+      relevance += Math.abs(comment.sentiment.score) * 10;
     }
 
     if (summaryKeywords && comment.body) {
       const lowerCaseBody = comment.body.toLowerCase();
-      summaryKeywords.forEach(keyword => {
+      summaryKeywords.forEach((keyword) => {
         if (lowerCaseBody.includes(keyword.toLowerCase())) {
-          relevance += 5; 
+          relevance += 5;
         }
       });
     }
@@ -200,8 +119,9 @@ async function identifyRelevantComments(comments, summaryKeywords) {
   return relevantComments.slice(0, 5);
 }
 
+// Utility function to add depth to comments (for UI formatting)
 function addDepthToComments(comments, depth = 0) {
-  comments.forEach(comment => {
+  comments.forEach((comment) => {
     comment.depth = depth;
     if (comment.replies && comment.replies.length > 0) {
       addDepthToComments(comment.replies, depth + 1);
@@ -209,6 +129,7 @@ function addDepthToComments(comments, depth = 0) {
   });
 }
 
+// Utility function to format results as Markdown
 function formatResultsAsMarkdown(results) {
   let markdown = `# Reddit Thread Analysis\n\n`;
 
@@ -224,28 +145,29 @@ function formatResultsAsMarkdown(results) {
 
   if (results.relevantComments && results.relevantComments.length > 0) {
     markdown += `## Most Relevant Comments\n\n`;
-    results.relevantComments.forEach(comment => {
-      markdown += `- **Author:** ${comment.author} (Score: ${comment.score}, Sentiment: ${comment.sentiment ? comment.sentiment.label : 'N/A'})\n`;
+    results.relevantComments.forEach((comment) => {
+      markdown += `- **Author:** ${comment.author} (Score: ${comment.score}, Sentiment: ${comment.sentiment ? comment.sentiment.label : "N/A"})\n`;
       markdown += `  ${comment.body}\n\n`;
     });
   }
 
   markdown += `## All Comments with Sentiment\n\n`;
   function renderCommentMarkdown(comment) {
-    const sentimentLabel = comment.sentiment ? comment.sentiment.label : 'N/A';
-    const sentimentScore = comment.sentiment ? comment.sentiment.score.toFixed(2) : 'N/A';
-    const indent = '  '.repeat(comment.depth);
+    const sentimentLabel = comment.sentiment ? comment.sentiment.label : "N/A";
+    const sentimentScore = comment.sentiment ? comment.sentiment.score.toFixed(2) : "N/A";
+    const indent = "  ".repeat(comment.depth);
     markdown += `${indent}- **Author:** ${comment.author} (Score: ${comment.score}, Sentiment: ${sentimentLabel} [${sentimentScore}])\n`;
     markdown += `${indent}  ${comment.body}\n\n`;
     if (comment.replies && comment.replies.length > 0) {
-      comment.replies.forEach(reply => renderCommentMarkdown(reply));
+      comment.replies.forEach((reply) => renderCommentMarkdown(reply));
     }
   }
-  results.comments.forEach(comment => renderCommentMarkdown(comment));
+  results.comments.forEach((comment) => renderCommentMarkdown(comment));
 
   return markdown;
 }
 
+// Function to generate AI response using OpenAI API
 async function generateAIResponse(analysisResults, apiKey) {
   if (!analysisResults || !apiKey) {
     console.error("Missing analysis results or API key for AI response generation.");
@@ -256,21 +178,21 @@ async function generateAIResponse(analysisResults, apiKey) {
                  `Summary: ${analysisResults.summary}\n\n` +
                  `Polarization: Positive: ${analysisResults.polarization.positive}, Negative: ${analysisResults.polarization.negative}, Neutral: ${analysisResults.polarization.neutral}, Score: ${analysisResults.polarization.polarization.toFixed(2)}\n\n` +
                  `Most Relevant Comments:\n` +
-                 analysisResults.relevantComments.map(c => `- ${c.body} (Sentiment: ${c.sentiment ? c.sentiment.label : 'N/A'})`).join('\n') + `\n\n` +
+                 analysisResults.relevantComments.map(c => `- ${c.body} (Sentiment: ${c.sentiment ? c.sentiment.label : "N/A"})`).join("\n") + `\n\n` +
                  `Generate a concise, intelligent response or comment that summarizes the discussion and highlights key points, considering the sentiment and polarization.`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 300
-      })
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 300,
+      }),
     });
 
     if (!response.ok) {
@@ -287,6 +209,7 @@ async function generateAIResponse(analysisResults, apiKey) {
   }
 }
 
+// Listener for messages from popup.js or content.js
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === "analyzeComments") {
     const url = sender.tab.url;
@@ -314,25 +237,40 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       let extractedComments = extractComments(data);
       console.log("Extracted comments before analysis:", extractedComments);
 
-      extractedComments = await analyzeSentiment(extractedComments);
-      console.log("Extracted comments after sentiment analysis:", extractedComments);
-
-      const polarizationData = calculatePolarization(extractedComments);
-      console.log("Polarization data:", polarizationData);
-
       let allCommentText = "";
       function collectText(comment) {
         if (comment.body) {
           allCommentText += comment.body + " ";
         }
-        comment.replies.forEach(collectText);
+        if (comment.replies && comment.replies.length > 0) {
+          comment.replies.forEach(collectText);
+        }
       }
       extractedComments.forEach(collectText);
 
-      const summary = await generateSummary(allCommentText);
-      console.log("Generated summary:", summary);
+      // Send comments to worker for sentiment analysis and summarization
+      analysisWorker.postMessage({ action: "analyzeComments", comments: extractedComments, allCommentText: allCommentText });
 
-      const summaryKeywords = summary.split(/\s+/).filter(word => word.length > 3);
+      // Wait for results from worker
+      const workerResults = await new Promise((resolve) => {
+        analysisWorker.onmessage = (e) => {
+          if (e.data.status === "completed") {
+            resolve(e.data);
+          } else if (e.data.status === "progress") {
+            console.log("Worker progress:", e.data.message); // Log progress for now, will update UI later
+            chrome.runtime.sendMessage(sender.tab.id, { action: "updateProgress", message: e.data.message });
+          }
+        };
+      });
+
+      extractedComments = workerResults.analyzedComments;
+      const summary = workerResults.summary;
+      console.log("Extracted comments after sentiment analysis (from worker):", extractedComments);
+
+      const polarizationData = calculatePolarization(extractedComments);
+      console.log("Polarization data:", polarizationData);
+
+      const summaryKeywords = summary.split(" ").filter((word) => word.length > 3);
 
       const topRelevantComments = await identifyRelevantComments(extractedComments, summaryKeywords);
       console.log("Top relevant comments:", topRelevantComments);
@@ -343,7 +281,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         comments: extractedComments,
         summary: summary,
         polarization: polarizationData,
-        relevantComments: topRelevantComments
+        relevantComments: topRelevantComments,
       };
 
       // Send all results to the popup
@@ -352,18 +290,17 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         comments: extractedComments,
         summary: summary,
         polarization: polarizationData,
-        relevantComments: topRelevantComments
+        relevantComments: topRelevantComments,
       });
 
       sendResponse({ status: "success", message: "Analysis complete and results sent to popup." });
-
     } catch (error) {
       console.error("Error fetching, analyzing or summarizing comments:", error);
       chrome.runtime.sendMessage(sender.tab.id, { action: "displayResults", status: "error", message: error.message });
       sendResponse({ status: "error", message: error.message });
     }
 
-    return true; 
+    return true; // Indicates that sendResponse will be called asynchronously
   } else if (request.action === "exportResults") {
     if (!lastAnalysisResults) {
       console.error("No analysis results to export.");
@@ -380,14 +317,14 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       mimeType = "text/markdown";
       extension = "md";
     } else if (request.format === "pdf") {
-      // For PDF, we'll generate Markdown first and then convert it.
+      // For PDF, we\'ll generate Markdown first and then convert it.
       // This requires a separate library or a more complex approach.
-      // For now, we'll just export a markdown file and inform the user.
+      // For now, we\'ll just export a markdown file and inform the user.
       content = formatResultsAsMarkdown(lastAnalysisResults);
       mimeType = "text/markdown";
       extension = "md";
       console.warn("PDF export is not fully implemented. Exporting as Markdown instead.");
-      // In a real scenario, you'd use a library like jsPDF or html2pdf.js here.
+      // In a real scenario, you\'d use a library like jsPDF or html2pdf.js here.
       // These libraries are usually too large to include directly in a service worker
       // and might require a dedicated offscreen document or content script to run.
     }
@@ -398,9 +335,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     chrome.downloads.download({
       url: url,
       filename: `${filename}.${extension}`,
-      saveAs: true
+      saveAs: true,
     });
-
   } else if (request.action === "toggleCleanReadMode") {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) {
@@ -425,8 +361,11 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       const aiResponse = await generateAIResponse(lastAnalysisResults, apiKey);
       chrome.runtime.sendMessage(sender.tab.id, { action: "displayAIResponse", aiResponse: aiResponse });
     });
+  } else if (request.action === "removeApiKey") {
+    chrome.storage.local.remove(["openaiApiKey"], () => {
+      console.log("OpenAI API Key removed from storage.");
+      sendResponse({ status: "success", message: "API Key removed." });
+    });
+    return true;
   }
 });
-
-initializeSentimentPipeline();
-initializeSummarizationPipeline();
