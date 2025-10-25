@@ -1,4 +1,6 @@
-import { pipeline } from './lib/transformers.min.js';
+// Importar a biblioteca transformers.min.js
+importScripts('./lib/transformers.min.js');
+const { pipeline } = self.transformers;
 
 let sentimentPipeline = null;
 let summarizationPipeline = null;
